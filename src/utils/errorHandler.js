@@ -11,6 +11,18 @@ class ApiError extends Error {
 }
 
 /**
+ * Async error handler wrapper
+ * Wraps async controller functions to catch errors and pass them to the error handler
+ * @param {Function} fn - Async function to wrap
+ * @returns {Function} - Express middleware function
+ */
+const catchAsync = (fn) => {
+    return (req, res, next) => {
+        Promise.resolve(fn(req, res, next)).catch(next);
+    };
+};
+
+/**
  * Global error handling middleware
  * Handles all errors thrown in the application
  * @param {Error} err - The error object
@@ -72,5 +84,6 @@ const errorHandler = (err, req, res, next) => {
 
 module.exports = {
     ApiError,
+    catchAsync,
     errorHandler
 }; 

@@ -10,6 +10,8 @@ require('dotenv').config();
 // Import routes
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
+const projectRoutes = require('./routes/project.routes');
+const fileRoutes = require('./routes/file.routes');
 
 // Connect to database
 connectDB();
@@ -43,6 +45,8 @@ app.get('/', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/files', fileRoutes);
 
 // Error handling middleware
 app.use(errorHandler);
