@@ -4,20 +4,17 @@ const { User } = require('../models');
 
 /**
  * Middleware to protect routes that require authentication
- * Verifies the JWT token from the Authorization header
+ * Verifies the JWT token from the HttpOnly cookie
  * Sets req.user to the authenticated user
  */
 const protect = async (req, res, next) => {
     let token;
 
-    // Check if token exists in Authorization header
-    if (
-        req.headers.authorization &&
-        req.headers.authorization.startsWith('Bearer')
-    ) {
+    // Check if token exists in cookies
+    if (req.cookies && req.cookies.auth_token) {
         try {
-            // Get token from header
-            token = req.headers.authorization.split(' ')[1];
+            // Get token from cookie
+            token = req.cookies.auth_token;
 
             // Verify token
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -38,9 +35,7 @@ const protect = async (req, res, next) => {
             console.error('Auth middleware error:', error);
             res.status(401).json({ message: 'Not authorized, token failed' });
         }
-    }
-
-    if (!token) {
+    } else {
         res.status(401).json({ message: 'Not authorized, no token' });
     }
 };

@@ -96,7 +96,7 @@ describe('Email Service', () => {
 
                 expect(emailService.loadTemplate).toHaveBeenCalledWith('verification', {
                     name: 'John Doe',
-                    verificationUrl: `${process.env.FRONTEND_URL}/verify/verification-token-123`
+                    verificationUrl: `${process.env.FRONTEND_URL}/verify?token=${encodeURIComponent('verification-token-123')}`
                 });
 
                 expect(mockTransporter.sendMail).toHaveBeenCalledWith({

@@ -81,7 +81,7 @@ class EmailService {
      * @returns {Promise<Object>} - Nodemailer send result
      */
     async sendVerificationEmail(to, name, token) {
-        const verificationUrl = `${process.env.FRONTEND_URL}/verify/${token}`;
+        const verificationUrl = `${process.env.FRONTEND_URL}/verify?token=${encodeURIComponent(token)}`;
 
         const html = await this.loadTemplate('verification', {
             name,
@@ -103,7 +103,7 @@ class EmailService {
      * @returns {Promise<Object>} - Nodemailer send result
      */
     async sendPasswordResetEmail(to, name, token) {
-        const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
+        const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
 
         const html = await this.loadTemplate('password-reset', {
             name,

@@ -112,8 +112,15 @@ const login = async (req, res) => {
         // Generate JWT token
         const token = generateJWT(user._id);
 
+        // Set token as HttpOnly cookie
+        res.cookie('auth_token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+            sameSite: 'strict',
+            maxAge: 24 * 60 * 60 * 1000, // 1 day
+        });
+
         res.json({
-            token,
             user: {
                 id: user._id,
                 email: user.email,
@@ -126,6 +133,22 @@ const login = async (req, res) => {
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ message: 'Server error during login' });
+    }
+};
+
+/**
+ * Logout user
+ * @route POST /api/auth/logout
+ * @access Public
+ */
+const logout = async (req, res) => {
+    try {
+        // Clear the auth cookie
+        res.clearCookie('auth_token');
+        res.json({ message: 'Logged out successfully' });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ message: 'Server error during logout' });
     }
 };
 
@@ -151,12 +174,17 @@ const getMe = async (req, res) => {
 
 /**
  * Verify email with token
- * @route POST /api/auth/verify/:token
+ * @route POST /api/auth/verify
  * @access Public
  */
 const verifyEmail = async (req, res) => {
     try {
-        const { token } = req.params;
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({ message: 'Verification token is required' });
+        }
+
         const hashedToken = hashToken(token);
 
         const user = await User.findOne({
@@ -272,13 +300,17 @@ const forgotPassword = async (req, res) => {
 
 /**
  * Reset password with token
- * @route POST /api/auth/reset-password/:token
+ * @route POST /api/auth/reset-password
  * @access Public
  */
 const resetPassword = async (req, res) => {
     try {
-        const { token } = req.params;
-        const { password } = req.body;
+        const { token, password } = req.body;
+
+        if (!token || !password) {
+            return res.status(400).json({ message: 'Token and password are required' });
+        }
+
         const hashedToken = hashToken(token);
 
         const user = await User.findOne({
@@ -339,6 +371,7 @@ const verifyUserForTesting = async (req, res) => {
 module.exports = {
     register,
     login,
+    logout,
     getMe,
     verifyEmail,
     resendVerification,

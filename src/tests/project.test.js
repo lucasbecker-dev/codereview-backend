@@ -31,9 +31,9 @@ const testProject = {
     tags: ['test', 'api']
 };
 
-// Global variables to store tokens and IDs
-let studentToken;
-let reviewerToken;
+// Global variables to store cookies and IDs
+let studentCookies;
+let reviewerCookies;
 let projectId;
 let fileId;
 
@@ -52,7 +52,18 @@ beforeAll(async () => {
         .post('/api/auth/register')
         .send(testReviewer);
 
-    // Login to get tokens
+    // Verify users for testing
+    const studentUser = await User.findOne({ email: testStudent.email });
+    await request(app)
+        .post('/api/auth/verify-test')
+        .send({ userId: studentUser._id.toString() });
+
+    const reviewerUser = await User.findOne({ email: testReviewer.email });
+    await request(app)
+        .post('/api/auth/verify-test')
+        .send({ userId: reviewerUser._id.toString() });
+
+    // Login to get cookies
     const studentLogin = await request(app)
         .post('/api/auth/login')
         .send({
@@ -60,7 +71,7 @@ beforeAll(async () => {
             password: testStudent.password
         });
 
-    studentToken = studentLogin.body.token;
+    studentCookies = studentLogin.headers['set-cookie'];
 
     const reviewerLogin = await request(app)
         .post('/api/auth/login')
@@ -69,7 +80,7 @@ beforeAll(async () => {
             password: testReviewer.password
         });
 
-    reviewerToken = reviewerLogin.body.token;
+    reviewerCookies = reviewerLogin.headers['set-cookie'];
 });
 
 // Cleanup after tests
@@ -87,7 +98,7 @@ describe('Project API', () => {
     test('Should create a new project', async () => {
         const res = await request(app)
             .post('/api/projects')
-            .set('Authorization', `Bearer ${studentToken}`)
+            .set('Cookie', studentCookies)
             .send(testProject);
 
         expect(res.statusCode).toEqual(201);
@@ -102,7 +113,7 @@ describe('Project API', () => {
     test('Should get all projects for the student', async () => {
         const res = await request(app)
             .get('/api/projects')
-            .set('Authorization', `Bearer ${studentToken}`);
+            .set('Cookie', studentCookies);
 
         expect(res.statusCode).toEqual(200);
         expect(res.body.success).toBe(true);
@@ -113,7 +124,7 @@ describe('Project API', () => {
     test('Should get a single project by ID', async () => {
         const res = await request(app)
             .get(`/api/projects/${projectId}`)
-            .set('Authorization', `Bearer ${studentToken}`);
+            .set('Cookie', studentCookies);
 
         expect(res.statusCode).toEqual(200);
         expect(res.body.success).toBe(true);
@@ -129,7 +140,7 @@ describe('Project API', () => {
 
         const res = await request(app)
             .put(`/api/projects/${projectId}`)
-            .set('Authorization', `Bearer ${studentToken}`)
+            .set('Cookie', studentCookies)
             .send(updatedData);
 
         expect(res.statusCode).toEqual(200);
@@ -145,7 +156,7 @@ describe('Project API', () => {
 
         const res = await request(app)
             .post(`/api/projects/${projectId}/files`)
-            .set('Authorization', `Bearer ${studentToken}`)
+            .set('Cookie', studentCookies)
             .attach('files', testFilePath);
 
         expect(res.statusCode).toEqual(201);
@@ -163,7 +174,7 @@ describe('Project API', () => {
     test('Should get all files for a project', async () => {
         const res = await request(app)
             .get(`/api/projects/${projectId}/files`)
-            .set('Authorization', `Bearer ${studentToken}`);
+            .set('Cookie', studentCookies);
 
         expect(res.statusCode).toEqual(200);
         expect(res.body.success).toBe(true);
@@ -174,7 +185,7 @@ describe('Project API', () => {
     test('Should get a single file by ID', async () => {
         const res = await request(app)
             .get(`/api/files/${fileId}`)
-            .set('Authorization', `Bearer ${studentToken}`);
+            .set('Cookie', studentCookies);
 
         expect(res.statusCode).toEqual(200);
         expect(res.body.success).toBe(true);
@@ -185,7 +196,7 @@ describe('Project API', () => {
     test('Should get raw file content', async () => {
         const res = await request(app)
             .get(`/api/files/${fileId}/raw`)
-            .set('Authorization', `Bearer ${studentToken}`);
+            .set('Cookie', studentCookies);
 
         expect(res.statusCode).toEqual(200);
         expect(res.text).toContain('Hello, World!');
@@ -200,7 +211,7 @@ describe('Project API', () => {
 
         const res = await request(app)
             .put(`/api/projects/${projectId}/status`)
-            .set('Authorization', `Bearer ${reviewerToken}`)
+            .set('Cookie', reviewerCookies)
             .send({ status: 'accepted' });
 
         expect(res.statusCode).toEqual(200);
@@ -212,7 +223,7 @@ describe('Project API', () => {
     test('Should add feedback to a project by reviewer', async () => {
         const res = await request(app)
             .post(`/api/projects/${projectId}/feedback`)
-            .set('Authorization', `Bearer ${reviewerToken}`)
+            .set('Cookie', reviewerCookies)
             .send({ text: 'This is test feedback for the project.' });
 
         expect(res.statusCode).toEqual(200);
