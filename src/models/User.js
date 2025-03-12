@@ -4,11 +4,6 @@ const bcrypt = require('bcrypt');
 // User schema will be fully implemented in Phase 1: Step 4
 const userSchema = new mongoose.Schema(
     {
-        name: {
-            type: String,
-            required: [true, 'Name is required'],
-            trim: true,
-        },
         email: {
             type: String,
             required: [true, 'Email is required'],
@@ -21,14 +16,91 @@ const userSchema = new mongoose.Schema(
             required: [true, 'Password is required'],
             minlength: [8, 'Password must be at least 8 characters'],
         },
+        firstName: {
+            type: String,
+            required: [true, 'First name is required'],
+            trim: true,
+        },
+        lastName: {
+            type: String,
+            required: [true, 'Last name is required'],
+            trim: true,
+        },
         role: {
             type: String,
             enum: ['student', 'reviewer', 'admin', 'superadmin'],
             default: 'student',
         },
+        cohort: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Cohort',
+            // Only required for students
+            validate: {
+                validator: function () {
+                    return this.role !== 'student' || this.cohort;
+                },
+                message: 'Cohort is required for students'
+            }
+        },
+        isActive: {
+            type: Boolean,
+            default: true,
+        },
         isVerified: {
             type: Boolean,
             default: false,
+        },
+        verificationToken: {
+            type: String,
+        },
+        profilePicture: {
+            type: String,
+            default: '',
+        },
+        bio: {
+            type: String,
+            default: '',
+        },
+        notificationPreferences: {
+            email: {
+                projectStatus: {
+                    type: Boolean,
+                    default: true,
+                },
+                newComment: {
+                    type: Boolean,
+                    default: true,
+                },
+                newAssignment: {
+                    type: Boolean,
+                    default: true,
+                },
+                newSubmission: {
+                    type: Boolean,
+                    default: true,
+                },
+            },
+            inApp: {
+                projectStatus: {
+                    type: Boolean,
+                    default: true,
+                },
+                newComment: {
+                    type: Boolean,
+                    default: true,
+                },
+                newAssignment: {
+                    type: Boolean,
+                    default: true,
+                },
+                newSubmission: {
+                    type: Boolean,
+                    default: true,
+                },
+            },
+        },
+        lastLogin: {
+            type: Date,
         },
     },
     {
