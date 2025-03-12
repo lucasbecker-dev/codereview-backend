@@ -7,7 +7,8 @@ const {
     verifyEmail,
     resendVerification,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    verifyUserForTesting
 } = require('../controllers/auth.controller');
 const { protect } = require('../middleware/auth');
 
@@ -21,5 +22,10 @@ router.post('/reset-password/:token', resetPassword);
 
 // Protected routes
 router.get('/me', protect, getMe);
+
+// Test routes - only available in non-production environments
+if (process.env.NODE_ENV !== 'production') {
+    router.post('/verify-test', verifyUserForTesting);
+}
 
 module.exports = router; 

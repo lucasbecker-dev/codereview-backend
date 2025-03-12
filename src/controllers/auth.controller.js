@@ -1,6 +1,6 @@
 const { User } = require('../models');
-const { generateJWT, generateVerificationToken, hashToken, generateExpirationDate } = require('../utils/tokenGenerator');
-const sendEmail = require('../services/email.service');
+const { generateJWT, generateVerificationToken, generatePasswordResetToken, hashToken, isTokenExpired } = require('../utils/tokenGenerator');
+const emailService = require('../services/email.service');
 
 /**
  * Register a new user
@@ -18,8 +18,8 @@ const register = async (req, res) => {
         }
 
         // Generate verification token
-        const verificationToken = generateVerificationToken();
-        const hashedToken = hashToken(verificationToken);
+        const { token, expiresAt } = generateVerificationToken();
+        const hashedToken = hashToken(token);
 
         // Create user
         const user = await User.create({
@@ -29,19 +29,17 @@ const register = async (req, res) => {
             lastName,
             role: role || 'student', // Default to student if no role provided
             verificationToken: hashedToken,
+            verificationTokenExpires: expiresAt,
+            isActive: true
         });
 
         // Send verification email
-        const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
-
         try {
-            await sendEmail({
-                to: email,
-                subject: 'Please verify your email',
-                text: `Please verify your email by clicking on the following link: ${verificationUrl}\n\nIf you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/verify/${verificationToken}`,
-                html: `<p>Please verify your email by clicking on the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>
-                      <p>If you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/verify/${verificationToken}</p>`,
-            });
+            await emailService.sendVerificationEmail(
+                email,
+                firstName,
+                token
+            );
 
             res.status(201).json({
                 message: 'User registered successfully. Please check your email to verify your account.',
@@ -161,7 +159,10 @@ const verifyEmail = async (req, res) => {
         const { token } = req.params;
         const hashedToken = hashToken(token);
 
-        const user = await User.findOne({ verificationToken: hashedToken });
+        const user = await User.findOne({
+            verificationToken: hashedToken,
+            verificationTokenExpires: { $gt: new Date() }
+        });
 
         if (!user) {
             return res.status(400).json({ message: 'Invalid or expired verification token' });
@@ -170,6 +171,7 @@ const verifyEmail = async (req, res) => {
         // Update user verification status
         user.isVerified = true;
         user.verificationToken = undefined;
+        user.verificationTokenExpires = undefined;
         await user.save();
 
         res.json({ message: 'Email verified successfully. You can now log in.' });
@@ -199,23 +201,20 @@ const resendVerification = async (req, res) => {
         }
 
         // Generate new verification token
-        const verificationToken = generateVerificationToken();
-        const hashedToken = hashToken(verificationToken);
+        const { token, expiresAt } = generateVerificationToken();
+        const hashedToken = hashToken(token);
 
         user.verificationToken = hashedToken;
+        user.verificationTokenExpires = expiresAt;
         await user.save();
 
         // Send verification email
-        const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
-
         try {
-            await sendEmail({
-                to: email,
-                subject: 'Please verify your email',
-                text: `Please verify your email by clicking on the following link: ${verificationUrl}\n\nIf you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/verify/${verificationToken}`,
-                html: `<p>Please verify your email by clicking on the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>
-                      <p>If you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/verify/${verificationToken}</p>`,
-            });
+            await emailService.sendVerificationEmail(
+                email,
+                user.firstName,
+                token
+            );
 
             res.json({ message: 'Verification email sent successfully' });
         } catch (error) {
@@ -244,35 +243,25 @@ const forgotPassword = async (req, res) => {
         }
 
         // Generate reset token
-        const resetToken = generateVerificationToken();
-        const hashedToken = hashToken(resetToken);
+        const { token, expiresAt } = generatePasswordResetToken();
+        const hashedToken = hashToken(token);
 
         // Save token to user
         user.resetPasswordToken = hashedToken;
-        user.resetPasswordExpire = generateExpirationDate(1); // 1 hour expiration
+        user.resetPasswordExpires = expiresAt;
         await user.save();
 
-        // Send reset email
-        const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-
+        // Send password reset email
         try {
-            await sendEmail({
-                to: email,
-                subject: 'Password Reset Request',
-                text: `You requested a password reset. Please click on the following link to reset your password: ${resetUrl}. This link is valid for 1 hour.\n\nIf you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/reset-password/${resetToken} with your new password in the request body.`,
-                html: `<p>You requested a password reset. Please click on the following link to reset your password: <a href="${resetUrl}">${resetUrl}</a>. This link is valid for 1 hour.</p>
-                      <p>If you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/reset-password/${resetToken} with your new password in the request body.</p>`,
-            });
+            await emailService.sendPasswordResetEmail(
+                email,
+                user.firstName,
+                token
+            );
 
             res.json({ message: 'Password reset email sent successfully' });
         } catch (error) {
             console.error('Email sending error:', error);
-
-            // Remove reset token if email fails
-            user.resetPasswordToken = undefined;
-            user.resetPasswordExpire = undefined;
-            await user.save();
-
             res.status(500).json({ message: 'Error sending password reset email' });
         }
     } catch (error) {
@@ -294,7 +283,7 @@ const resetPassword = async (req, res) => {
 
         const user = await User.findOne({
             resetPasswordToken: hashedToken,
-            resetPasswordExpire: { $gt: Date.now() },
+            resetPasswordExpires: { $gt: new Date() }
         });
 
         if (!user) {
@@ -304,13 +293,46 @@ const resetPassword = async (req, res) => {
         // Update password
         user.password = password;
         user.resetPasswordToken = undefined;
-        user.resetPasswordExpire = undefined;
+        user.resetPasswordExpires = undefined;
         await user.save();
 
-        res.json({ message: 'Password reset successful. You can now log in with your new password.' });
+        res.json({ message: 'Password reset successfully. You can now log in with your new password.' });
     } catch (error) {
         console.error('Reset password error:', error);
         res.status(500).json({ message: 'Server error during password reset' });
+    }
+};
+
+/**
+ * @desc    Verify user email for testing purposes
+ * @route   POST /api/auth/verify-test
+ * @access  Public (but should be restricted in production)
+ */
+const verifyUserForTesting = async (req, res) => {
+    try {
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ message: 'User ID is required' });
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Mark user as verified
+        user.isVerified = true;
+        user.verificationToken = undefined;
+        user.verificationTokenExpires = undefined;
+
+        await user.save();
+
+        res.status(200).json({ message: 'User verified successfully' });
+    } catch (error) {
+        console.error('Error verifying user for testing:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
 
@@ -322,4 +344,5 @@ module.exports = {
     resendVerification,
     forgotPassword,
     resetPassword,
+    verifyUserForTesting
 }; 

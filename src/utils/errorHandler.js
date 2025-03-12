@@ -11,44 +11,62 @@ class ApiError extends Error {
 }
 
 /**
- * Error handler middleware
- * @param {Error} err - Error object
+ * Global error handling middleware
+ * Handles all errors thrown in the application
+ * @param {Error} err - The error object
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
+ * @param {Function} next - Express next function
  */
 const errorHandler = (err, req, res, next) => {
-    let error = { ...err };
-    error.message = err.message;
-
     // Log error for debugging
-    console.error(err);
+    console.error('Error:', err);
 
-    // Mongoose validation error
+    // Check if error is a Multer error
+    if (err.name === 'MulterError') {
+        return res.status(400).json({
+            message: 'File upload error',
+            error: err.message
+        });
+    }
+
+    // Check if error is a validation error
     if (err.name === 'ValidationError') {
-        const message = Object.values(err.errors).map(val => val.message).join(', ');
-        error = new ApiError(message, 400);
+        return res.status(400).json({
+            message: 'Validation error',
+            error: err.message
+        });
     }
 
-    // Mongoose duplicate key error
+    // Check if error is a MongoDB duplicate key error
     if (err.code === 11000) {
-        const field = Object.keys(err.keyValue)[0];
-        const message = `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`;
-        error = new ApiError(message, 400);
+        return res.status(400).json({
+            message: 'Duplicate key error',
+            error: 'A record with that value already exists'
+        });
     }
 
-    // JWT errors
+    // Check if error is a JWT error
     if (err.name === 'JsonWebTokenError') {
-        error = new ApiError('Invalid token', 401);
+        return res.status(401).json({
+            message: 'Invalid token',
+            error: err.message
+        });
     }
 
+    // Check if error is a JWT expired error
     if (err.name === 'TokenExpiredError') {
-        error = new ApiError('Token expired', 401);
+        return res.status(401).json({
+            message: 'Token expired',
+            error: err.message
+        });
     }
 
-    res.status(error.statusCode || 500).json({
-        success: false,
-        error: error.message || 'Server Error'
+    // Default error response
+    const statusCode = err.statusCode || 500;
+    res.status(statusCode).json({
+        message: err.message || 'Server error',
+        error: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.stack
     });
 };
 

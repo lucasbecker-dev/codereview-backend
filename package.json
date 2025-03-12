@@ -9,7 +9,13 @@
     "test": "jest --watchAll --verbose",
     "lint": "eslint .",
     "drop-db": "node src/scripts/dropDatabase.js",
-    "fresh": "node src/scripts/freshStart.js"
+    "fresh": "node src/scripts/freshStart.js",
+    "test-email": "node src/scripts/testEmail.js",
+    "test-templates": "node src/scripts/testTemplates.js",
+    "test-auth-email": "node src/scripts/testAuthEmail.js",
+    "test-user-api": "node src/scripts/testUserAPI.js",
+    "find-users": "node src/scripts/findUsers.js",
+    "verify-users": "node src/scripts/verifyUsers.js"
   },
   "repository": {
     "type": "git",
@@ -32,10 +38,14 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.12.1",
-    "nodemailer": "^6.10.0"
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.0",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "axios": "^1.6.8",
     "eslint": "^9.22.0",
+    "form-data": "^4.0.0",
     "jest": "^29.7.0",
     "nodemon": "^3.1.9",
     "supertest": "^7.0.0"

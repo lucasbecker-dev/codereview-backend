@@ -14,15 +14,53 @@ const generateJWT = (id) => {
 };
 
 /**
- * Generate a random token for email verification or password reset
- * @returns {string} Random token
+ * Generate a random token for verification or password reset
+ * @param {number} [bytes=32] - Number of bytes for the token
+ * @returns {string} - Random token
  */
-const generateVerificationToken = () => {
-    // Generate a random token
-    const token = crypto.randomBytes(32).toString('hex');
+const generateToken = (bytes = 32) => {
+    return crypto.randomBytes(bytes).toString('hex');
+};
 
-    // Return the token
-    return token;
+/**
+ * Generate a verification token with expiry
+ * @param {number} [expiryHours=24] - Token expiry in hours
+ * @returns {Object} - Token and expiry date
+ */
+const generateVerificationToken = (expiryHours = 24) => {
+    const token = generateToken();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + expiryHours);
+
+    return {
+        token,
+        expiresAt
+    };
+};
+
+/**
+ * Generate a password reset token with expiry
+ * @param {number} [expiryHours=1] - Token expiry in hours
+ * @returns {Object} - Token and expiry date
+ */
+const generatePasswordResetToken = (expiryHours = 1) => {
+    const token = generateToken();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + expiryHours);
+
+    return {
+        token,
+        expiresAt
+    };
+};
+
+/**
+ * Check if a token is expired
+ * @param {Date} expiryDate - Token expiry date
+ * @returns {boolean} - True if token is expired
+ */
+const isTokenExpired = (expiryDate) => {
+    return new Date() > new Date(expiryDate);
 };
 
 /**
@@ -46,6 +84,8 @@ const generateExpirationDate = (hours = 24) => {
 module.exports = {
     generateJWT,
     generateVerificationToken,
+    generatePasswordResetToken,
+    isTokenExpired,
     hashToken,
     generateExpirationDate,
 }; 
