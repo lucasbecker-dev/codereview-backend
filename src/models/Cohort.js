@@ -45,7 +45,6 @@ cohortSchema.virtual('isCurrent').get(function () {
 });
 
 // Indexes for faster queries
-cohortSchema.index({ name: 1 });
 cohortSchema.index({ isActive: 1 });
 cohortSchema.index({ startDate: 1, endDate: 1 });
 

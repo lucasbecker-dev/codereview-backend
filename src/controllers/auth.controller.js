@@ -38,8 +38,9 @@ const register = async (req, res) => {
             await sendEmail({
                 to: email,
                 subject: 'Please verify your email',
-                text: `Please verify your email by clicking on the following link: ${verificationUrl}`,
-                html: `<p>Please verify your email by clicking on the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
+                text: `Please verify your email by clicking on the following link: ${verificationUrl}\n\nIf you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/verify/${verificationToken}`,
+                html: `<p>Please verify your email by clicking on the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>
+                      <p>If you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/verify/${verificationToken}</p>`,
             });
 
             res.status(201).json({
@@ -211,8 +212,9 @@ const resendVerification = async (req, res) => {
             await sendEmail({
                 to: email,
                 subject: 'Please verify your email',
-                text: `Please verify your email by clicking on the following link: ${verificationUrl}`,
-                html: `<p>Please verify your email by clicking on the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
+                text: `Please verify your email by clicking on the following link: ${verificationUrl}\n\nIf you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/verify/${verificationToken}`,
+                html: `<p>Please verify your email by clicking on the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>
+                      <p>If you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/verify/${verificationToken}</p>`,
             });
 
             res.json({ message: 'Verification email sent successfully' });
@@ -257,8 +259,9 @@ const forgotPassword = async (req, res) => {
             await sendEmail({
                 to: email,
                 subject: 'Password Reset Request',
-                text: `You requested a password reset. Please click on the following link to reset your password: ${resetUrl}. This link is valid for 1 hour.`,
-                html: `<p>You requested a password reset. Please click on the following link to reset your password: <a href="${resetUrl}">${resetUrl}</a>. This link is valid for 1 hour.</p>`,
+                text: `You requested a password reset. Please click on the following link to reset your password: ${resetUrl}. This link is valid for 1 hour.\n\nIf you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/reset-password/${resetToken} with your new password in the request body.`,
+                html: `<p>You requested a password reset. Please click on the following link to reset your password: <a href="${resetUrl}">${resetUrl}</a>. This link is valid for 1 hour.</p>
+                      <p>If you're testing the API directly, you can make a POST request to: ${process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5000'}/api/auth/reset-password/${resetToken} with your new password in the request body.</p>`,
             });
 
             res.json({ message: 'Password reset email sent successfully' });
