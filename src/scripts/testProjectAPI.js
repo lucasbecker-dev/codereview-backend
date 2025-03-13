@@ -8,10 +8,13 @@ const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
 
+// Configure axios to handle cookies
+axios.defaults.withCredentials = true;
+
 // Configuration
 const API_URL = process.env.API_URL || 'http://localhost:5000/api';
-let studentToken = '';
-let reviewerToken = '';
+let studentAxios;
+let reviewerAxios;
 let projectId = '';
 let fileId = '';
 
@@ -73,18 +76,25 @@ const loginUser = async (email, password) => {
     try {
         const response = await axios.post(`${API_URL}/auth/login`, { email, password });
         console.log(`Logged in as ${email}`);
-        return response.data.token;
+
+        // Create an axios instance with the cookies
+        const cookies = response.headers['set-cookie'];
+        const axiosInstance = axios.create({
+            headers: {
+                Cookie: cookies.join('; ')
+            }
+        });
+
+        return axiosInstance;
     } catch (error) {
         console.error('Error logging in:', error.response ? error.response.data : error.message);
     }
 };
 
 // Create a project
-const createProject = async (token, projectData) => {
+const createProject = async (axiosInstance, projectData) => {
     try {
-        const response = await axios.post(`${API_URL}/projects`, projectData, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.post(`${API_URL}/projects`, projectData);
         console.log(`Created project: ${projectData.title}`);
         return response.data.data;
     } catch (error) {
@@ -93,11 +103,9 @@ const createProject = async (token, projectData) => {
 };
 
 // Get all projects
-const getProjects = async (token) => {
+const getProjects = async (axiosInstance) => {
     try {
-        const response = await axios.get(`${API_URL}/projects`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/projects`);
         console.log(`Retrieved ${response.data.count} projects`);
         return response.data.data;
     } catch (error) {
@@ -106,11 +114,9 @@ const getProjects = async (token) => {
 };
 
 // Get a single project
-const getProject = async (token, id) => {
+const getProject = async (axiosInstance, id) => {
     try {
-        const response = await axios.get(`${API_URL}/projects/${id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/projects/${id}`);
         console.log(`Retrieved project: ${response.data.data.title}`);
         return response.data.data;
     } catch (error) {
@@ -119,11 +125,9 @@ const getProject = async (token, id) => {
 };
 
 // Update a project
-const updateProject = async (token, id, updateData) => {
+const updateProject = async (axiosInstance, id, updateData) => {
     try {
-        const response = await axios.put(`${API_URL}/projects/${id}`, updateData, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.put(`${API_URL}/projects/${id}`, updateData);
         console.log(`Updated project: ${response.data.data.title}`);
         return response.data.data;
     } catch (error) {
@@ -132,14 +136,13 @@ const updateProject = async (token, id, updateData) => {
 };
 
 // Upload a file to a project
-const uploadFile = async (token, projectId, filePath) => {
+const uploadFile = async (axiosInstance, projectId, filePath) => {
     try {
         const form = new FormData();
         form.append('files', fs.createReadStream(filePath));
 
-        const response = await axios.post(`${API_URL}/projects/${projectId}/files`, form, {
+        const response = await axiosInstance.post(`${API_URL}/projects/${projectId}/files`, form, {
             headers: {
-                Authorization: `Bearer ${token}`,
                 ...form.getHeaders()
             }
         });
@@ -151,11 +154,9 @@ const uploadFile = async (token, projectId, filePath) => {
 };
 
 // Get all files for a project
-const getProjectFiles = async (token, projectId) => {
+const getProjectFiles = async (axiosInstance, projectId) => {
     try {
-        const response = await axios.get(`${API_URL}/projects/${projectId}/files`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/projects/${projectId}/files`);
         console.log(`Retrieved ${response.data.count} files for project ${projectId}`);
         return response.data.data;
     } catch (error) {
@@ -164,11 +165,9 @@ const getProjectFiles = async (token, projectId) => {
 };
 
 // Get a single file
-const getFile = async (token, fileId) => {
+const getFile = async (axiosInstance, fileId) => {
     try {
-        const response = await axios.get(`${API_URL}/files/${fileId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/files/${fileId}`);
         console.log(`Retrieved file: ${response.data.data.filename}`);
         return response.data.data;
     } catch (error) {
@@ -177,11 +176,9 @@ const getFile = async (token, fileId) => {
 };
 
 // Get raw file content
-const getRawFileContent = async (token, fileId) => {
+const getRawFileContent = async (axiosInstance, fileId) => {
     try {
-        const response = await axios.get(`${API_URL}/files/${fileId}/raw`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/files/${fileId}/raw`);
         console.log(`Retrieved raw content for file ${fileId}`);
         return response.data;
     } catch (error) {
@@ -190,11 +187,9 @@ const getRawFileContent = async (token, fileId) => {
 };
 
 // Update project status
-const updateProjectStatus = async (token, projectId, status) => {
+const updateProjectStatus = async (axiosInstance, projectId, status) => {
     try {
-        const response = await axios.put(`${API_URL}/projects/${projectId}/status`, { status }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.put(`${API_URL}/projects/${projectId}/status`, { status });
         console.log(`Updated project status to: ${status}`);
         return response.data.data;
     } catch (error) {
@@ -202,39 +197,37 @@ const updateProjectStatus = async (token, projectId, status) => {
     }
 };
 
-// Add feedback to a project
-const addFeedback = async (token, projectId, text) => {
+// Delete a project
+const deleteProject = async (axiosInstance, projectId) => {
     try {
-        const response = await axios.post(`${API_URL}/projects/${projectId}/feedback`, { text }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        console.log(`Added feedback to project ${projectId}`);
-        return response.data.data;
+        const response = await axiosInstance.delete(`${API_URL}/projects/${projectId}`);
+        console.log(`Deleted project: ${projectId}`);
+        return response.data;
     } catch (error) {
-        console.error('Error adding feedback:', error.response ? error.response.data : error.message);
+        console.error('Error deleting project:', error.response ? error.response.data : error.message);
     }
 };
 
 // Main test function
-const runTests = async () => {
+const testProjectAPI = async () => {
     try {
-        console.log('Starting Project and File API tests...');
+        console.log('Starting Project API tests...');
 
         // Register test users
         await registerUser(testStudent);
         await registerUser(testReviewer);
 
         // Login as student and reviewer
-        studentToken = await loginUser(testStudent.email, testStudent.password);
-        reviewerToken = await loginUser(testReviewer.email, testReviewer.password);
+        studentAxios = await loginUser(testStudent.email, testStudent.password);
+        reviewerAxios = await loginUser(testReviewer.email, testReviewer.password);
 
-        if (!studentToken || !reviewerToken) {
-            console.error('Failed to get authentication tokens. Exiting tests.');
+        if (!studentAxios || !reviewerAxios) {
+            console.error('Failed to login. Exiting tests.');
             return;
         }
 
-        // Create a project
-        const project = await createProject(studentToken, testProject);
+        // Create a test project
+        const project = await createProject(studentAxios, testProject);
         if (!project) {
             console.error('Failed to create project. Exiting tests.');
             return;
@@ -242,51 +235,46 @@ const runTests = async () => {
         projectId = project._id;
 
         // Get all projects
-        await getProjects(studentToken);
+        await getProjects(studentAxios);
 
-        // Get a single project
-        await getProject(studentToken, projectId);
+        // Get the specific project
+        await getProject(studentAxios, projectId);
 
-        // Update a project
-        await updateProject(studentToken, projectId, {
-            title: 'Updated Test Project',
-            description: 'This is an updated test project'
+        // Update the project
+        await updateProject(studentAxios, projectId, {
+            description: 'Updated test project description'
         });
 
-        // Create and upload a test file
+        // Create a test file to upload
         const testFilePath = createTestFile();
-        const files = await uploadFile(studentToken, projectId, testFilePath);
+
+        // Upload the file to the project
+        const files = await uploadFile(studentAxios, projectId, testFilePath);
+        if (files && files.length > 0) {
+            fileId = files[0]._id;
+
+            // Get all files for the project
+            await getProjectFiles(studentAxios, projectId);
+
+            // Get the specific file
+            await getFile(studentAxios, fileId);
+
+            // Get the raw file content
+            await getRawFileContent(studentAxios, fileId);
+        }
+
+        // Update project status (as reviewer)
+        await updateProjectStatus(reviewerAxios, projectId, 'in_review');
+
+        // Clean up
+        await deleteProject(studentAxios, projectId);
         deleteTestFile(testFilePath);
 
-        if (!files || files.length === 0) {
-            console.error('Failed to upload file. Exiting tests.');
-            return;
-        }
-        fileId = files[0]._id;
-
-        // Get all files for a project
-        await getProjectFiles(studentToken, projectId);
-
-        // Get a single file
-        await getFile(studentToken, fileId);
-
-        // Get raw file content
-        await getRawFileContent(studentToken, fileId);
-
-        // Manually assign reviewer to project (this would normally be done through the assignment API)
-        console.log('Note: In a real scenario, reviewers would be assigned through the assignment API');
-
-        // Update project status
-        await updateProjectStatus(reviewerToken, projectId, 'accepted');
-
-        // Add feedback to a project
-        await addFeedback(reviewerToken, projectId, 'This is test feedback for the project.');
-
-        console.log('All tests completed successfully!');
+        console.log('Project API tests completed successfully!');
     } catch (error) {
-        console.error('Error running tests:', error);
+        console.error('Error in test sequence:', error.message);
     }
 };
 
 // Run the tests
-runTests(); 
+testProjectAPI(); 

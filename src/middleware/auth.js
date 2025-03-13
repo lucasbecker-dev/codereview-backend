@@ -4,7 +4,7 @@ const { User } = require('../models');
 
 /**
  * Middleware to protect routes that require authentication
- * Verifies the JWT token from the HttpOnly cookie
+ * Verifies the JWT token from the HttpOnly cookie or Authorization header
  * Sets req.user to the authenticated user
  */
 const protect = async (req, res, next) => {
@@ -12,31 +12,48 @@ const protect = async (req, res, next) => {
 
     // Check if token exists in cookies
     if (req.cookies && req.cookies.auth_token) {
-        try {
-            // Get token from cookie
-            token = req.cookies.auth_token;
+        token = req.cookies.auth_token;
+    }
+    // Check if token exists in Authorization header
+    else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+    }
 
-            // Verify token
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: 'Not authorized, no token'
+        });
+    }
 
-            // Find user by id and exclude password
-            req.user = await User.findById(decoded.id).select('-password');
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-            if (!req.user) {
-                return res.status(401).json({ message: 'User not found' });
-            }
+        // Find user by id and exclude password
+        req.user = await User.findById(decoded.id).select('-password');
 
-            if (!req.user.isActive) {
-                return res.status(401).json({ message: 'User account is deactivated' });
-            }
-
-            next();
-        } catch (error) {
-            console.error('Auth middleware error:', error);
-            res.status(401).json({ message: 'Not authorized, token failed' });
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                message: 'User not found'
+            });
         }
-    } else {
-        res.status(401).json({ message: 'Not authorized, no token' });
+
+        if (!req.user.isActive) {
+            return res.status(401).json({
+                success: false,
+                message: 'User account is deactivated'
+            });
+        }
+
+        next();
+    } catch (error) {
+        console.error('Auth middleware error:', error);
+        res.status(401).json({
+            success: false,
+            message: 'Not authorized, token failed'
+        });
     }
 };
 
@@ -49,6 +66,7 @@ const authorize = (roles) => {
     return (req, res, next) => {
         if (!roles.includes(req.user.role)) {
             return res.status(403).json({
+                success: false,
                 message: `Role ${req.user.role} is not authorized to access this resource`,
             });
         }

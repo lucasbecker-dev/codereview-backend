@@ -5,8 +5,10 @@ const User = require('../models/User');
 const Project = require('../models/Project');
 const File = require('../models/File');
 const Comment = require('../models/Comment');
-const { generateToken } = require('../utils/tokenGenerator');
 const connectDB = require('../config/db');
+
+// Configure axios to handle cookies
+axios.defaults.withCredentials = true;
 
 // Test data
 const testUser = {
@@ -85,8 +87,22 @@ async function testCommentAPI() {
             }
         });
         const userId = user._id;
-        const authToken = generateToken(userId);
         console.log('Created test user');
+
+        // Login as test user
+        const userLoginResponse = await axios.post(`${API_URL}/auth/login`, {
+            email: testUser.email,
+            password: testUser.password
+        });
+        console.log('Logged in as test user');
+
+        // Store the cookies for user
+        const userCookies = userLoginResponse.headers['set-cookie'];
+        const userAxios = axios.create({
+            headers: {
+                Cookie: userCookies.join('; ')
+            }
+        });
 
         // Create test reviewer
         const reviewer = await User.create({
@@ -109,8 +125,22 @@ async function testCommentAPI() {
             }
         });
         const reviewerId = reviewer._id;
-        const reviewerToken = generateToken(reviewerId);
         console.log('Created test reviewer');
+
+        // Login as reviewer
+        const reviewerLoginResponse = await axios.post(`${API_URL}/auth/login`, {
+            email: testReviewer.email,
+            password: testReviewer.password
+        });
+        console.log('Logged in as reviewer');
+
+        // Store the cookies for reviewer
+        const reviewerCookies = reviewerLoginResponse.headers['set-cookie'];
+        const reviewerAxios = axios.create({
+            headers: {
+                Cookie: reviewerCookies.join('; ')
+            }
+        });
 
         // Create test project
         const project = await Project.create({
@@ -132,18 +162,13 @@ async function testCommentAPI() {
 
         // Test creating a comment
         console.log('\nTesting POST /api/comments');
-        const createCommentResponse = await axios.post(
+        const createCommentResponse = await userAxios.post(
             `${API_URL}/comments`,
             {
                 projectId,
                 fileId,
                 lineNumber: testComment.lineNumber,
                 text: testComment.text
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${authToken}`
-                }
             }
         );
         console.log('Response status:', createCommentResponse.status);
@@ -153,41 +178,26 @@ async function testCommentAPI() {
 
         // Test getting comments for a file
         console.log('\nTesting GET /api/files/:fileId/comments');
-        const getFileCommentsResponse = await axios.get(
-            `${API_URL}/files/${fileId}/comments`,
-            {
-                headers: {
-                    Authorization: `Bearer ${authToken}`
-                }
-            }
+        const getFileCommentsResponse = await userAxios.get(
+            `${API_URL}/files/${fileId}/comments`
         );
         console.log('Response status:', getFileCommentsResponse.status);
         console.log('Response data:', getFileCommentsResponse.data);
 
         // Test getting comments for a project
         console.log('\nTesting GET /api/projects/:projectId/comments');
-        const getProjectCommentsResponse = await axios.get(
-            `${API_URL}/projects/${projectId}/comments`,
-            {
-                headers: {
-                    Authorization: `Bearer ${authToken}`
-                }
-            }
+        const getProjectCommentsResponse = await userAxios.get(
+            `${API_URL}/projects/${projectId}/comments`
         );
         console.log('Response status:', getProjectCommentsResponse.status);
         console.log('Response data:', getProjectCommentsResponse.data);
 
         // Test adding a reply to a comment
         console.log('\nTesting POST /api/comments/:commentId/replies');
-        const addReplyResponse = await axios.post(
+        const addReplyResponse = await reviewerAxios.post(
             `${API_URL}/comments/${commentId}/replies`,
             {
                 text: testReply.text
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${reviewerToken}`
-                }
             }
         );
         console.log('Response status:', addReplyResponse.status);
@@ -197,77 +207,52 @@ async function testCommentAPI() {
 
         // Test creating a comment to delete
         console.log('\nCreating a comment to delete');
-        const createCommentToDeleteResponse = await axios.post(
+        const createCommentToDeleteResponse = await userAxios.post(
             `${API_URL}/comments`,
             {
                 projectId,
                 fileId,
                 lineNumber: 2,
                 text: 'Comment to delete'
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${authToken}`
-                }
             }
         );
         const commentToDeleteId = createCommentToDeleteResponse.data.data._id;
 
         // Test deleting a comment
         console.log('\nTesting DELETE /api/comments/:commentId');
-        const deleteCommentResponse = await axios.delete(
-            `${API_URL}/comments/${commentToDeleteId}`,
-            {
-                headers: {
-                    Authorization: `Bearer ${authToken}`
-                }
-            }
+        const deleteCommentResponse = await userAxios.delete(
+            `${API_URL}/comments/${commentToDeleteId}`
         );
         console.log('Response status:', deleteCommentResponse.status);
         console.log('Response data:', deleteCommentResponse.data);
 
         // Test creating a comment with a reply to delete
         console.log('\nCreating a comment with a reply to delete');
-        const createCommentWithReplyResponse = await axios.post(
+        const createCommentWithReplyResponse = await userAxios.post(
             `${API_URL}/comments`,
             {
                 projectId,
                 fileId,
                 lineNumber: 3,
                 text: 'Comment with reply to delete'
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${authToken}`
-                }
             }
         );
         const commentWithReplyId = createCommentWithReplyResponse.data.data._id;
 
         // Add a reply to the comment
         console.log('\nAdding a reply to delete');
-        const addReplyToDeleteResponse = await axios.post(
+        const addReplyToDeleteResponse = await reviewerAxios.post(
             `${API_URL}/comments/${commentWithReplyId}/replies`,
             {
                 text: 'Reply to delete'
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${reviewerToken}`
-                }
             }
         );
         const replyToDeleteId = addReplyToDeleteResponse.data.data._id;
 
         // Test deleting a reply
         console.log('\nTesting DELETE /api/comments/:commentId/replies/:replyId');
-        const deleteReplyResponse = await axios.delete(
-            `${API_URL}/comments/${commentWithReplyId}/replies/${replyToDeleteId}`,
-            {
-                headers: {
-                    Authorization: `Bearer ${reviewerToken}`
-                }
-            }
+        const deleteReplyResponse = await reviewerAxios.delete(
+            `${API_URL}/comments/${commentWithReplyId}/replies/${replyToDeleteId}`
         );
         console.log('Response status:', deleteReplyResponse.status);
         console.log('Response data:', deleteReplyResponse.data);

@@ -9,6 +9,9 @@ const path = require('path');
 const mongoose = require('mongoose');
 require('dotenv').config();
 
+// Configure axios to handle cookies
+axios.defaults.withCredentials = true;
+
 // Configuration
 const API_URL = 'http://localhost:5000/api';
 
@@ -29,7 +32,7 @@ const testProject = {
 };
 
 // Global variables
-let token = '';
+let axiosInstance;
 let projectId = '';
 let fileId = '';
 
@@ -91,7 +94,16 @@ const login = async () => {
             password: testUser.password
         });
         console.log('Login successful');
-        return response.data.token;
+
+        // Create an axios instance with the cookies
+        const cookies = response.headers['set-cookie'];
+        const instance = axios.create({
+            headers: {
+                Cookie: cookies.join('; ')
+            }
+        });
+
+        return instance;
     } catch (error) {
         console.error('Login error:', error.response ? error.response.data : error.message);
         throw error;
@@ -102,9 +114,7 @@ const login = async () => {
 const createProject = async () => {
     try {
         console.log('Creating project...');
-        const response = await axios.post(`${API_URL}/projects`, testProject, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.post(`${API_URL}/projects`, testProject);
         console.log('Project created:', response.data);
         return response.data.data._id;
     } catch (error) {
@@ -117,9 +127,7 @@ const createProject = async () => {
 const getProjects = async () => {
     try {
         console.log('Getting all projects...');
-        const response = await axios.get(`${API_URL}/projects`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/projects`);
         console.log('Projects retrieved:', response.data);
         return response.data;
     } catch (error) {
@@ -132,9 +140,7 @@ const getProjects = async () => {
 const getProject = async (id) => {
     try {
         console.log(`Getting project ${id}...`);
-        const response = await axios.get(`${API_URL}/projects/${id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/projects/${id}`);
         console.log('Project retrieved:', response.data);
         return response.data;
     } catch (error) {
@@ -147,12 +153,10 @@ const getProject = async (id) => {
 const updateProject = async (id) => {
     try {
         console.log(`Updating project ${id}...`);
-        const updateData = {
+        const response = await axiosInstance.put(`${API_URL}/projects/${id}`, {
             title: 'Updated Test Project',
-            description: 'This is an updated test project'
-        };
-        const response = await axios.put(`${API_URL}/projects/${id}`, updateData, {
-            headers: { Authorization: `Bearer ${token}` }
+            description: 'This is an updated test project',
+            tags: ['updated', 'test', 'api']
         });
         console.log('Project updated:', response.data);
         return response.data;
@@ -162,7 +166,7 @@ const updateProject = async (id) => {
     }
 };
 
-// Create and upload a test file
+// Create a test file
 const createTestFile = () => {
     const testFilePath = path.join(__dirname, 'testfile.js');
     fs.writeFileSync(testFilePath, 'console.log("Hello, World!");');
@@ -176,9 +180,8 @@ const uploadFile = async (projectId, filePath) => {
         const form = new FormData();
         form.append('files', fs.createReadStream(filePath));
 
-        const response = await axios.post(`${API_URL}/projects/${projectId}/files`, form, {
+        const response = await axiosInstance.post(`${API_URL}/projects/${projectId}/files`, form, {
             headers: {
-                Authorization: `Bearer ${token}`,
                 ...form.getHeaders()
             }
         });
@@ -194,9 +197,7 @@ const uploadFile = async (projectId, filePath) => {
 const getProjectFiles = async (projectId) => {
     try {
         console.log(`Getting files for project ${projectId}...`);
-        const response = await axios.get(`${API_URL}/projects/${projectId}/files`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/projects/${projectId}/files`);
         console.log('Files retrieved:', response.data);
         return response.data;
     } catch (error) {
@@ -209,9 +210,7 @@ const getProjectFiles = async (projectId) => {
 const getFile = async (fileId) => {
     try {
         console.log(`Getting file ${fileId}...`);
-        const response = await axios.get(`${API_URL}/files/${fileId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/files/${fileId}`);
         console.log('File retrieved:', response.data);
         return response.data;
     } catch (error) {
@@ -224,10 +223,8 @@ const getFile = async (fileId) => {
 const getRawFileContent = async (fileId) => {
     try {
         console.log(`Getting raw content for file ${fileId}...`);
-        const response = await axios.get(`${API_URL}/files/${fileId}/raw`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        console.log('Raw content retrieved:', response.data);
+        const response = await axiosInstance.get(`${API_URL}/files/${fileId}/raw`);
+        console.log('Raw content retrieved');
         return response.data;
     } catch (error) {
         console.error('Get raw file content error:', error.response ? error.response.data : error.message);
@@ -235,11 +232,11 @@ const getRawFileContent = async (fileId) => {
     }
 };
 
-// Clean up test file
+// Delete a test file
 const deleteTestFile = (filePath) => {
     if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
-        console.log(`Deleted test file: ${filePath}`);
+        console.log('Test file deleted');
     }
 };
 
@@ -253,23 +250,18 @@ const disconnectDB = async () => {
     }
 };
 
-// Main function to run all tests
+// Run all tests
 const runTests = async () => {
     try {
-        // Connect to MongoDB
+        // Connect to the database
         await connectDB();
 
         // Register and verify user
         await register();
         await verifyUser(testUser.email);
 
-        // Login with verified user
-        token = await login();
-
-        if (!token) {
-            console.error('Failed to get authentication token. Exiting tests.');
-            return;
-        }
+        // Login to get cookies
+        axiosInstance = await login();
 
         // Create a project
         projectId = await createProject();
@@ -286,7 +278,6 @@ const runTests = async () => {
         // Create and upload a test file
         const testFilePath = createTestFile();
         fileId = await uploadFile(projectId, testFilePath);
-        deleteTestFile(testFilePath);
 
         // Get all files for a project
         await getProjectFiles(projectId);
@@ -297,11 +288,15 @@ const runTests = async () => {
         // Get raw file content
         await getRawFileContent(fileId);
 
+        // Clean up
+        deleteTestFile(testFilePath);
+
+        // Disconnect from the database
+        await disconnectDB();
+
         console.log('All tests completed successfully!');
     } catch (error) {
-        console.error('Test failed:', error);
-    } finally {
-        // Disconnect from MongoDB
+        console.error('Test sequence failed:', error);
         await disconnectDB();
     }
 };

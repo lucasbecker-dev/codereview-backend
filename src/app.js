@@ -16,6 +16,7 @@ const fileRoutes = require('./routes/file.routes');
 const commentRoutes = require('./routes/comment.routes');
 const cohortRoutes = require('./routes/cohort.routes');
 const assignmentRoutes = require('./routes/assignment.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 // Connect to database
 connectDB();
@@ -61,6 +62,7 @@ app.use('/api/files', fileRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/cohorts', cohortRoutes);
 app.use('/api/assignments', assignmentRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error handling middleware
 app.use(errorHandler);

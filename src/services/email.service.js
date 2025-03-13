@@ -9,15 +9,7 @@ const readFile = promisify(fs.readFile);
  */
 class EmailService {
     constructor() {
-        this.transporter = nodemailer.createTransport({
-            host: process.env.EMAIL_HOST,
-            port: process.env.EMAIL_PORT,
-            secure: process.env.EMAIL_SECURE === 'true',
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASSWORD
-            }
-        });
+        this.transporter = createTransporter();
     }
 
     /**
@@ -147,5 +139,44 @@ class EmailService {
         });
     }
 }
+
+// Create a mock transport for testing
+const createMockTransport = () => {
+    return {
+        sendMail: (options) => {
+            console.log('Mock email sent:', {
+                to: options.to,
+                subject: options.subject
+            });
+            return Promise.resolve({
+                messageId: 'mock-message-id-' + Date.now(),
+                envelope: {
+                    from: options.from,
+                    to: [options.to]
+                }
+            });
+        }
+    };
+};
+
+// Initialize the transporter
+const createTransporter = () => {
+    // Use mock transport in test environment
+    if (process.env.NODE_ENV === 'test') {
+        console.log('Using mock email transport for tests');
+        return createMockTransport();
+    }
+
+    // Use real transport in other environments
+    return nodemailer.createTransport({
+        host: process.env.EMAIL_HOST,
+        port: process.env.EMAIL_PORT,
+        secure: process.env.EMAIL_SECURE === 'true',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASSWORD
+        }
+    });
+};
 
 module.exports = new EmailService(); 

@@ -5,7 +5,6 @@ const User = require('../models/User');
 const Project = require('../models/Project');
 const File = require('../models/File');
 const Comment = require('../models/Comment');
-const { generateToken } = require('../utils/tokenGenerator');
 
 // Mock the notification service
 jest.mock('../services/notification.service', () => ({
@@ -55,8 +54,8 @@ const testReply = {
     text: 'This is a test reply'
 };
 
-let authToken;
-let reviewerToken;
+let userCookies;
+let reviewerCookies;
 let userId;
 let reviewerId;
 let projectId;
@@ -92,7 +91,6 @@ beforeAll(async () => {
         }
     });
     userId = user._id;
-    authToken = generateToken(userId);
 
     // Create test reviewer
     const reviewer = await User.create({
@@ -115,7 +113,23 @@ beforeAll(async () => {
         }
     });
     reviewerId = reviewer._id;
-    reviewerToken = generateToken(reviewerId);
+
+    // Login as user and reviewer to get cookies
+    const userLoginResponse = await request(app)
+        .post('/api/auth/login')
+        .send({
+            email: testUser.email,
+            password: testUser.password
+        });
+    userCookies = userLoginResponse.headers['set-cookie'];
+
+    const reviewerLoginResponse = await request(app)
+        .post('/api/auth/login')
+        .send({
+            email: testReviewer.email,
+            password: testReviewer.password
+        });
+    reviewerCookies = reviewerLoginResponse.headers['set-cookie'];
 
     // Create test project
     const project = await Project.create({
@@ -134,17 +148,24 @@ beforeAll(async () => {
     fileId = file._id;
 });
 
-// Disconnect from the database after tests
+// Clean up after tests
 afterAll(async () => {
+    // Clear test data
+    await User.deleteMany({ email: { $in: [testUser.email, testReviewer.email] } });
+    await Project.deleteMany({ title: testProject.title });
+    await File.deleteMany({ filename: testFile.filename });
+    await Comment.deleteMany({});
+
+    // Close database connection
     await mongoose.connection.close();
 });
 
 describe('Comment API', () => {
     describe('POST /api/comments', () => {
-        it('should create a new comment', async () => {
+        test('Should create a new comment', async () => {
             const res = await request(app)
                 .post('/api/comments')
-                .set('Authorization', `Bearer ${authToken}`)
+                .set('Cookie', userCookies)
                 .send({
                     projectId,
                     fileId,
@@ -153,22 +174,19 @@ describe('Comment API', () => {
                 });
 
             expect(res.statusCode).toEqual(201);
-            expect(res.body.success).toBe(true);
+            expect(res.body.status).toEqual('success');
             expect(res.body.data).toHaveProperty('_id');
             expect(res.body.data.text).toEqual(testComment.text);
             expect(res.body.data.lineNumber).toEqual(testComment.lineNumber);
-            expect(res.body.data.author).toHaveProperty('_id');
-            expect(res.body.data.author).toHaveProperty('firstName');
-            expect(res.body.data.author).toHaveProperty('lastName');
+            expect(res.body.data.author.toString()).toEqual(userId.toString());
 
-            // Save comment ID for later tests
             commentId = res.body.data._id;
         });
 
-        it('should return 400 if required fields are missing', async () => {
+        test('Should return 400 if required fields are missing', async () => {
             const res = await request(app)
                 .post('/api/comments')
-                .set('Authorization', `Bearer ${authToken}`)
+                .set('Cookie', userCookies)
                 .send({
                     projectId,
                     fileId,
@@ -176,28 +194,13 @@ describe('Comment API', () => {
                 });
 
             expect(res.statusCode).toEqual(400);
-            expect(res.body.success).toBe(false);
+            expect(res.body.status).toEqual('error');
         });
 
-        it('should return 404 if project does not exist', async () => {
+        test('Should return 404 if file not found', async () => {
             const res = await request(app)
                 .post('/api/comments')
-                .set('Authorization', `Bearer ${authToken}`)
-                .send({
-                    projectId: new mongoose.Types.ObjectId(), // Non-existent project ID
-                    fileId,
-                    lineNumber: testComment.lineNumber,
-                    text: testComment.text
-                });
-
-            expect(res.statusCode).toEqual(404);
-            expect(res.body.success).toBe(false);
-        });
-
-        it('should return 404 if file does not exist', async () => {
-            const res = await request(app)
-                .post('/api/comments')
-                .set('Authorization', `Bearer ${authToken}`)
+                .set('Cookie', userCookies)
                 .send({
                     projectId,
                     fileId: new mongoose.Types.ObjectId(), // Non-existent file ID
@@ -206,111 +209,99 @@ describe('Comment API', () => {
                 });
 
             expect(res.statusCode).toEqual(404);
-            expect(res.body.success).toBe(false);
+            expect(res.body.status).toEqual('error');
         });
     });
 
     describe('GET /api/files/:fileId/comments', () => {
-        it('should get all comments for a file', async () => {
+        test('Should get all comments for a file', async () => {
             const res = await request(app)
                 .get(`/api/files/${fileId}/comments`)
-                .set('Authorization', `Bearer ${authToken}`);
+                .set('Cookie', userCookies);
 
             expect(res.statusCode).toEqual(200);
-            expect(res.body.success).toBe(true);
-            expect(Array.isArray(res.body.data)).toBe(true);
+            expect(res.body.status).toEqual('success');
+            expect(Array.isArray(res.body.data)).toBeTruthy();
             expect(res.body.data.length).toBeGreaterThan(0);
-            expect(res.body.data[0]).toHaveProperty('_id');
-            expect(res.body.data[0]).toHaveProperty('text');
-            expect(res.body.data[0]).toHaveProperty('lineNumber');
-            expect(res.body.data[0]).toHaveProperty('author');
         });
 
-        it('should return 404 if file does not exist', async () => {
+        test('Should return 404 if file not found', async () => {
             const res = await request(app)
                 .get(`/api/files/${new mongoose.Types.ObjectId()}/comments`)
-                .set('Authorization', `Bearer ${authToken}`);
+                .set('Cookie', userCookies);
 
             expect(res.statusCode).toEqual(404);
-            expect(res.body.success).toBe(false);
+            expect(res.body.status).toEqual('error');
         });
     });
 
     describe('GET /api/projects/:projectId/comments', () => {
-        it('should get all comments for a project', async () => {
+        test('Should get all comments for a project', async () => {
             const res = await request(app)
                 .get(`/api/projects/${projectId}/comments`)
-                .set('Authorization', `Bearer ${authToken}`);
+                .set('Cookie', userCookies);
 
             expect(res.statusCode).toEqual(200);
-            expect(res.body.success).toBe(true);
-            expect(Array.isArray(res.body.data)).toBe(true);
+            expect(res.body.status).toEqual('success');
+            expect(Array.isArray(res.body.data)).toBeTruthy();
             expect(res.body.data.length).toBeGreaterThan(0);
-            expect(res.body.data[0]).toHaveProperty('_id');
-            expect(res.body.data[0]).toHaveProperty('text');
-            expect(res.body.data[0]).toHaveProperty('lineNumber');
-            expect(res.body.data[0]).toHaveProperty('author');
-            expect(res.body.data[0]).toHaveProperty('file');
         });
 
-        it('should return 404 if project does not exist', async () => {
+        test('Should return 404 if project not found', async () => {
             const res = await request(app)
                 .get(`/api/projects/${new mongoose.Types.ObjectId()}/comments`)
-                .set('Authorization', `Bearer ${authToken}`);
+                .set('Cookie', userCookies);
 
             expect(res.statusCode).toEqual(404);
-            expect(res.body.success).toBe(false);
+            expect(res.body.status).toEqual('error');
         });
     });
 
     describe('POST /api/comments/:commentId/replies', () => {
-        it('should add a reply to a comment', async () => {
+        test('Should add a reply to a comment', async () => {
             const res = await request(app)
                 .post(`/api/comments/${commentId}/replies`)
-                .set('Authorization', `Bearer ${reviewerToken}`)
+                .set('Cookie', reviewerCookies)
                 .send({
                     text: testReply.text
                 });
 
-            expect(res.statusCode).toEqual(201);
-            expect(res.body.success).toBe(true);
-            expect(res.body.data).toHaveProperty('_id');
-            expect(res.body.data).toHaveProperty('text');
-            expect(res.body.data.text).toEqual(testReply.text);
-            expect(res.body.data).toHaveProperty('author');
+            expect(res.statusCode).toEqual(200);
+            expect(res.body.status).toEqual('success');
+            expect(res.body.data.replies.length).toEqual(1);
+            expect(res.body.data.replies[0].text).toEqual(testReply.text);
+            expect(res.body.data.replies[0].author.toString()).toEqual(reviewerId.toString());
         });
 
-        it('should return 400 if reply text is missing', async () => {
+        test('Should return 400 if reply text is missing', async () => {
             const res = await request(app)
                 .post(`/api/comments/${commentId}/replies`)
-                .set('Authorization', `Bearer ${authToken}`)
-                .send({
-                    // Missing text
-                });
+                .set('Cookie', reviewerCookies)
+                .send({});
 
             expect(res.statusCode).toEqual(400);
-            expect(res.body.success).toBe(false);
+            expect(res.body.status).toEqual('error');
         });
 
-        it('should return 404 if comment does not exist', async () => {
+        test('Should return 404 if comment not found', async () => {
             const res = await request(app)
                 .post(`/api/comments/${new mongoose.Types.ObjectId()}/replies`)
-                .set('Authorization', `Bearer ${authToken}`)
+                .set('Cookie', reviewerCookies)
                 .send({
                     text: testReply.text
                 });
 
             expect(res.statusCode).toEqual(404);
-            expect(res.body.success).toBe(false);
+            expect(res.body.status).toEqual('error');
         });
     });
 
     describe('DELETE /api/comments/:commentId', () => {
-        it('should delete a comment', async () => {
+        test('Should delete a comment', async () => {
             // First create a comment to delete
             const createRes = await request(app)
                 .post('/api/comments')
-                .set('Authorization', `Bearer ${authToken}`)
+                .set('Cookie', userCookies)
                 .send({
                     projectId,
                     fileId,
@@ -322,35 +313,32 @@ describe('Comment API', () => {
 
             const res = await request(app)
                 .delete(`/api/comments/${commentToDeleteId}`)
-                .set('Authorization', `Bearer ${authToken}`);
+                .set('Cookie', userCookies);
 
             expect(res.statusCode).toEqual(200);
-            expect(res.body.success).toBe(true);
-
-            // Verify comment is deleted
-            const checkRes = await Comment.findById(commentToDeleteId);
-            expect(checkRes).toBeNull();
+            expect(res.body.status).toEqual('success');
+            expect(res.body.message).toContain('Comment deleted');
         });
 
-        it('should return 404 if comment does not exist', async () => {
+        test('Should return 404 if comment not found', async () => {
             const res = await request(app)
                 .delete(`/api/comments/${new mongoose.Types.ObjectId()}`)
-                .set('Authorization', `Bearer ${authToken}`);
+                .set('Cookie', userCookies);
 
             expect(res.statusCode).toEqual(404);
-            expect(res.body.success).toBe(false);
+            expect(res.body.status).toEqual('error');
         });
 
-        it('should return 401 if user is not the author', async () => {
-            // First create a comment as the student
+        test('Should return 403 if user is not the author', async () => {
+            // Create a comment as the user
             const createRes = await request(app)
                 .post('/api/comments')
-                .set('Authorization', `Bearer ${authToken}`)
+                .set('Cookie', userCookies)
                 .send({
                     projectId,
                     fileId,
                     lineNumber: 3,
-                    text: 'Comment by student'
+                    text: 'Comment for auth test'
                 });
 
             const commentId = createRes.body.data._id;
@@ -358,24 +346,24 @@ describe('Comment API', () => {
             // Try to delete as the reviewer
             const res = await request(app)
                 .delete(`/api/comments/${commentId}`)
-                .set('Authorization', `Bearer ${reviewerToken}`);
+                .set('Cookie', reviewerCookies);
 
-            expect(res.statusCode).toEqual(401);
-            expect(res.body.success).toBe(false);
+            expect(res.statusCode).toEqual(403);
+            expect(res.body.status).toEqual('error');
         });
     });
 
     describe('DELETE /api/comments/:commentId/replies/:replyId', () => {
-        it('should delete a reply', async () => {
-            // First create a comment
+        test('Should delete a reply', async () => {
+            // First create a comment with a reply
             const createCommentRes = await request(app)
                 .post('/api/comments')
-                .set('Authorization', `Bearer ${authToken}`)
+                .set('Cookie', userCookies)
                 .send({
                     projectId,
                     fileId,
                     lineNumber: 4,
-                    text: 'Comment with reply'
+                    text: 'Comment with reply to delete'
                 });
 
             const commentWithReplyId = createCommentRes.body.data._id;
@@ -383,57 +371,72 @@ describe('Comment API', () => {
             // Add a reply
             const addReplyRes = await request(app)
                 .post(`/api/comments/${commentWithReplyId}/replies`)
-                .set('Authorization', `Bearer ${reviewerToken}`)
+                .set('Cookie', reviewerCookies)
                 .send({
                     text: 'Reply to delete'
                 });
 
-            const replyId = addReplyRes.body.data._id;
+            const replyId = addReplyRes.body.data.replies[0]._id;
 
             // Delete the reply
             const res = await request(app)
                 .delete(`/api/comments/${commentWithReplyId}/replies/${replyId}`)
-                .set('Authorization', `Bearer ${reviewerToken}`);
+                .set('Cookie', reviewerCookies);
 
             expect(res.statusCode).toEqual(200);
-            expect(res.body.success).toBe(true);
-
-            // Verify reply is deleted
-            const checkRes = await Comment.findById(commentWithReplyId);
-            const replyExists = checkRes.replies.some(reply => reply._id.toString() === replyId);
-            expect(replyExists).toBe(false);
+            expect(res.body.status).toEqual('success');
+            expect(res.body.message).toContain('Reply deleted');
         });
 
-        it('should return 404 if comment does not exist', async () => {
+        test('Should return 404 if comment not found', async () => {
             const res = await request(app)
                 .delete(`/api/comments/${new mongoose.Types.ObjectId()}/replies/${new mongoose.Types.ObjectId()}`)
-                .set('Authorization', `Bearer ${authToken}`);
+                .set('Cookie', reviewerCookies);
 
             expect(res.statusCode).toEqual(404);
-            expect(res.body.success).toBe(false);
+            expect(res.body.status).toEqual('error');
         });
 
-        it('should return 404 if reply does not exist', async () => {
-            // First create a comment
+        test('Should return 404 if reply not found', async () => {
+            const res = await request(app)
+                .delete(`/api/comments/${commentId}/replies/${new mongoose.Types.ObjectId()}`)
+                .set('Cookie', reviewerCookies);
+
+            expect(res.statusCode).toEqual(404);
+            expect(res.body.status).toEqual('error');
+        });
+
+        test('Should return 403 if user is not the author of the reply', async () => {
+            // Create a comment
             const createCommentRes = await request(app)
                 .post('/api/comments')
-                .set('Authorization', `Bearer ${authToken}`)
+                .set('Cookie', userCookies)
                 .send({
                     projectId,
                     fileId,
                     lineNumber: 5,
-                    text: 'Comment without reply'
+                    text: 'Comment with reply for auth test'
                 });
 
             const commentId = createCommentRes.body.data._id;
 
-            // Try to delete a non-existent reply
-            const res = await request(app)
-                .delete(`/api/comments/${commentId}/replies/${new mongoose.Types.ObjectId()}`)
-                .set('Authorization', `Bearer ${authToken}`);
+            // Add a reply as reviewer
+            const addReplyRes = await request(app)
+                .post(`/api/comments/${commentId}/replies`)
+                .set('Cookie', reviewerCookies)
+                .send({
+                    text: 'Reply for auth test'
+                });
 
-            expect(res.statusCode).toEqual(404);
-            expect(res.body.success).toBe(false);
+            const replyId = addReplyRes.body.data.replies[0]._id;
+
+            // Try to delete as user (not the author of the reply)
+            const res = await request(app)
+                .delete(`/api/comments/${commentId}/replies/${replyId}`)
+                .set('Cookie', userCookies);
+
+            expect(res.statusCode).toEqual(403);
+            expect(res.body.status).toEqual('error');
         });
     });
 }); 

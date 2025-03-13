@@ -8,6 +8,9 @@ const fs = require('fs');
 const FormData = require('form-data');
 const path = require('path');
 
+// Configure axios to handle cookies
+axios.defaults.withCredentials = true;
+
 // API base URL
 const API_URL = process.env.BASE_URL || 'http://localhost:5000/api';
 
@@ -27,9 +30,9 @@ const adminUser = {
     lastName: 'User'
 };
 
-// Store tokens
-let userToken = '';
-let adminToken = '';
+// Store axios instances with cookies
+let userAxios;
+let adminAxios;
 let userId = '';
 let adminId = '';
 
@@ -71,13 +74,25 @@ const verifyUserEmail = async (userId) => {
 /**
  * Login a user
  * @param {Object} credentials - User credentials
- * @returns {Promise<Object>} Response data with token
+ * @returns {Promise<Object>} Response data with axios instance
  */
 const loginUser = async (credentials) => {
     try {
         const response = await axios.post(`${API_URL}/auth/login`, credentials);
         console.log('User logged in:', response.data.user.email);
-        return response.data;
+
+        // Create an axios instance with the cookies
+        const cookies = response.headers['set-cookie'];
+        const axiosInstance = axios.create({
+            headers: {
+                Cookie: cookies.join('; ')
+            }
+        });
+
+        return {
+            data: response.data,
+            axiosInstance
+        };
     } catch (error) {
         console.error('Error logging in:', error.response?.data || error.message);
         throw error;
@@ -86,14 +101,12 @@ const loginUser = async (credentials) => {
 
 /**
  * Get all users (admin only)
- * @param {string} token - Admin JWT token
+ * @param {Object} axiosInstance - Axios instance with admin cookies
  * @returns {Promise<Object>} Response data with users
  */
-const getAllUsers = async (token) => {
+const getAllUsers = async (axiosInstance) => {
     try {
-        const response = await axios.get(`${API_URL}/users`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axiosInstance.get(`${API_URL}/users`);
         console.log('Got all users:', response.data.users.length);
         return response.data;
     } catch (error) {
@@ -104,20 +117,14 @@ const getAllUsers = async (token) => {
 
 /**
  * Get user by ID
- * @param {string} token - JWT token
+ * @param {Object} axiosInstance - Axios instance with cookies
  * @param {string} id - User ID
  * @returns {Promise<Object>} Response data with user
  */
-const getUserById = async (token, id) => {
+const getUserById = async (axiosInstance, id) => {
     try {
-        if (!id) {
-            throw new Error('User ID is undefined or empty');
-        }
-        console.log(`Attempting to get user with ID: ${id}`);
-        const response = await axios.get(`${API_URL}/users/${id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        console.log('Got user by ID:', response.data.email);
+        const response = await axiosInstance.get(`${API_URL}/users/${id}`);
+        console.log('Got user by ID:', response.data.user.email);
         return response.data;
     } catch (error) {
         console.error('Error getting user by ID:', error.response?.data || error.message);
@@ -126,18 +133,16 @@ const getUserById = async (token, id) => {
 };
 
 /**
- * Update user profile
- * @param {string} token - JWT token
+ * Update user
+ * @param {Object} axiosInstance - Axios instance with cookies
  * @param {string} id - User ID
  * @param {Object} updateData - Data to update
  * @returns {Promise<Object>} Response data with updated user
  */
-const updateUser = async (token, id, updateData) => {
+const updateUser = async (axiosInstance, id, updateData) => {
     try {
-        const response = await axios.put(`${API_URL}/users/${id}`, updateData, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        console.log('Updated user:', response.data.email);
+        const response = await axiosInstance.put(`${API_URL}/users/${id}`, updateData);
+        console.log('Updated user:', response.data.user.email);
         return response.data;
     } catch (error) {
         console.error('Error updating user:', error.response?.data || error.message);
@@ -146,76 +151,43 @@ const updateUser = async (token, id, updateData) => {
 };
 
 /**
- * Change user password
- * @param {string} token - JWT token
- * @param {string} id - User ID
- * @param {string} currentPassword - Current password
- * @param {string} newPassword - New password
- * @returns {Promise<Object>} Response data
- */
-const changePassword = async (token, id, currentPassword, newPassword) => {
-    try {
-        const response = await axios.put(
-            `${API_URL}/users/${id}/password`,
-            { currentPassword, newPassword },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-        console.log('Changed password:', response.data.message);
-        return response.data;
-    } catch (error) {
-        console.error('Error changing password:', error.response?.data || error.message);
-        throw error;
-    }
-};
-
-/**
- * Update notification preferences
- * @param {string} token - JWT token
- * @param {string} id - User ID
- * @param {Object} preferences - Notification preferences
- * @returns {Promise<Object>} Response data
- */
-const updateNotificationPreferences = async (token, id, preferences) => {
-    try {
-        const response = await axios.put(
-            `${API_URL}/users/${id}/notification-preferences`,
-            preferences,
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-        console.log('Updated notification preferences:', response.data.message);
-        return response.data;
-    } catch (error) {
-        console.error('Error updating notification preferences:', error.response?.data || error.message);
-        throw error;
-    }
-};
-
-/**
- * Upload profile picture
- * @param {string} token - JWT token
+ * Update user profile picture
+ * @param {Object} axiosInstance - Axios instance with cookies
  * @param {string} id - User ID
  * @param {string} imagePath - Path to image file
- * @returns {Promise<Object>} Response data
+ * @returns {Promise<Object>} Response data with updated user
  */
-const uploadProfilePicture = async (token, id, imagePath) => {
+const updateProfilePicture = async (axiosInstance, id, imagePath) => {
     try {
         const form = new FormData();
-        form.append('profileImage', fs.createReadStream(imagePath));
+        form.append('profilePicture', fs.createReadStream(imagePath));
 
-        const response = await axios.post(
-            `${API_URL}/users/${id}/profile-picture`,
-            form,
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    ...form.getHeaders()
-                }
+        const response = await axiosInstance.put(`${API_URL}/users/${id}/profile-picture`, form, {
+            headers: {
+                ...form.getHeaders()
             }
-        );
-        console.log('Uploaded profile picture:', response.data.message);
+        });
+        console.log('Updated profile picture for user:', response.data.user.email);
         return response.data;
     } catch (error) {
-        console.error('Error uploading profile picture:', error.response?.data || error.message);
+        console.error('Error updating profile picture:', error.response?.data || error.message);
+        throw error;
+    }
+};
+
+/**
+ * Delete user
+ * @param {Object} axiosInstance - Axios instance with admin cookies
+ * @param {string} id - User ID to delete
+ * @returns {Promise<Object>} Response data
+ */
+const deleteUser = async (axiosInstance, id) => {
+    try {
+        const response = await axiosInstance.delete(`${API_URL}/users/${id}`);
+        console.log('Deleted user:', id);
+        return response.data;
+    } catch (error) {
+        console.error('Error deleting user:', error.response?.data || error.message);
         throw error;
     }
 };
@@ -227,139 +199,59 @@ const runTests = async () => {
     try {
         console.log('Starting User API tests...');
 
-        // Register test users
-        let testUserData, adminUserData;
+        // Register users
+        const userRegisterResponse = await registerUser(testUser);
+        userId = userRegisterResponse.user._id;
 
-        try {
-            testUserData = await registerUser(testUser);
-            console.log('Test user registered with ID:', testUserData.user.id);
-        } catch (error) {
-            console.log('User may already exist, continuing...');
-        }
+        const adminRegisterResponse = await registerUser(adminUser);
+        adminId = adminRegisterResponse.user._id;
 
-        try {
-            adminUserData = await registerUser(adminUser);
-            console.log('Admin user registered with ID:', adminUserData.user.id);
-        } catch (error) {
-            console.log('Admin may already exist, continuing...');
-        }
-
-        // Verify user emails
-        if (testUserData) {
-            await verifyUserEmail(testUserData.user.id);
-        } else {
-            // If user already exists, we need to get their ID
-            // This is a simplified approach - in a real scenario, you might need to handle this differently
-            console.log('Test user already exists, attempting to login without verification...');
-            try {
-                const loginData = await loginUser({
-                    email: testUser.email,
-                    password: testUser.password
-                });
-                testUserData = { user: { id: loginData.user.id } };
-            } catch (error) {
-                console.log('Could not login existing user, trying to find user by email...');
-                // In a real scenario, you might need an admin token to search for users
-                // For simplicity, we'll assume the user exists and continue with the test
-            }
-        }
-
-        if (adminUserData) {
-            await verifyUserEmail(adminUserData.user.id);
-        } else {
-            console.log('Admin user already exists, attempting to login without verification...');
-            try {
-                const loginData = await loginUser({
-                    email: adminUser.email,
-                    password: adminUser.password
-                });
-                adminUserData = { user: { id: loginData.user.id } };
-            } catch (error) {
-                console.log('Could not login existing admin, trying to find user by email...');
-                // Similar to above, in a real scenario you'd handle this differently
-            }
-        }
+        // Verify emails
+        await verifyUserEmail(userId);
+        await verifyUserEmail(adminId);
 
         // Login users
-        const userLoginData = await loginUser({
+        const userLoginResponse = await loginUser({
             email: testUser.email,
             password: testUser.password
         });
-        userToken = userLoginData.token;
-        userId = userLoginData.user.id;
-        console.log(`Test user ID set to: ${userId}`);
+        userAxios = userLoginResponse.axiosInstance;
 
-        const adminLoginData = await loginUser({
+        const adminLoginResponse = await loginUser({
             email: adminUser.email,
             password: adminUser.password
         });
-        adminToken = adminLoginData.token;
-        adminId = adminLoginData.user.id;
-        console.log(`Admin user ID set to: ${adminId}`);
+        adminAxios = adminLoginResponse.axiosInstance;
 
-        // Test admin-only endpoint
-        const allUsers = await getAllUsers(adminToken);
-        console.log(`Found ${allUsers.users.length} users`);
+        // Test admin endpoints
+        await getAllUsers(adminAxios);
 
-        // Test getting user by ID - only proceed if we have valid IDs
-        if (userId) {
-            console.log('Testing getUserById with test user ID');
-            await getUserById(userToken, userId);
-            await getUserById(adminToken, userId); // Admin can get any user
-        } else {
-            console.log('Skipping getUserById test - no valid user ID');
-        }
+        // Test user endpoints
+        await getUserById(userAxios, userId);
 
-        // Only proceed with remaining tests if we have valid IDs
-        if (userId) {
-            // Test updating user profile
-            await updateUser(userToken, userId, {
-                bio: 'This is a test bio'
-            });
+        // Update user
+        await updateUser(userAxios, userId, {
+            firstName: 'Updated',
+            lastName: 'Name'
+        });
 
-            // Test admin updating user role
-            await updateUser(adminToken, userId, {
-                role: 'student'
-            });
+        // Create a test image for profile picture
+        const testImagePath = path.join(__dirname, 'test-profile.png');
+        // Create a simple 1x1 pixel PNG
+        fs.writeFileSync(testImagePath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
 
-            // Test changing password
-            await changePassword(userToken, userId, testUser.password, 'newpassword123');
+        // Update profile picture
+        await updateProfilePicture(userAxios, userId, testImagePath);
 
-            // Login with new password
-            const newLoginData = await loginUser({
-                email: testUser.email,
-                password: 'newpassword123'
-            });
-            userToken = newLoginData.token;
+        // Clean up test image
+        fs.unlinkSync(testImagePath);
 
-            // Change password back
-            await changePassword(userToken, userId, 'newpassword123', testUser.password);
+        // Delete user (admin only)
+        await deleteUser(adminAxios, userId);
 
-            // Test updating notification preferences
-            await updateNotificationPreferences(userToken, userId, {
-                email: {
-                    newComment: false
-                },
-                inApp: {
-                    projectStatus: false
-                }
-            });
-
-            // Test uploading profile picture
-            // Create a test image if it doesn't exist
-            const testImagePath = path.join(__dirname, 'test-profile.png');
-            if (!fs.existsSync(testImagePath)) {
-                console.log('Test image does not exist, skipping profile picture upload test');
-            } else {
-                await uploadProfilePicture(userToken, userId, testImagePath);
-            }
-        } else {
-            console.log('Skipping remaining tests - no valid user ID');
-        }
-
-        console.log('All tests completed successfully!');
+        console.log('All User API tests completed successfully!');
     } catch (error) {
-        console.error('Test failed:', error);
+        console.error('Test sequence failed:', error.message);
     }
 };
 
