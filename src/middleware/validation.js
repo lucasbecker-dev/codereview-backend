@@ -50,7 +50,7 @@ const registerValidation = [
 
     body('role')
         .optional()
-        .isIn(['student', 'instructor', 'admin']).withMessage('Invalid role')
+        .isIn(['student', 'reviewer', 'admin', 'superadmin']).withMessage('Invalid role')
 ];
 
 /**

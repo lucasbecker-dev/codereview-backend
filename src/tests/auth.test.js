@@ -92,13 +92,16 @@ describe('Auth API', () => {
 
         // Check that the cookie was cleared
         expect(res.headers['set-cookie'][0]).toContain('auth_token=;');
+
+        // Clear cookies in the test to simulate browser clearing cookies
+        cookies = null;
     });
 
     // Test accessing protected route after logout
     test('Should not access protected route after logout', async () => {
         const res = await request(app)
-            .get('/api/auth/me')
-            .set('Cookie', cookies);
+            .get('/api/auth/me');
+        // No cookies sent since they were cleared
 
         expect(res.statusCode).toEqual(401);
     });

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const projectController = require('../controllers/project.controller');
 const fileController = require('../controllers/file.controller');
+const { getProjectComments } = require('../controllers/comment.controller');
 const { protect, authorize } = require('../middleware/auth');
 
 // Protect all routes
@@ -30,5 +31,9 @@ router.route('/:projectId/files')
         fileController.uploadMiddleware,
         fileController.uploadFiles
     );
+
+// Project comments routes
+router.route('/:projectId/comments')
+    .get(getProjectComments);
 
 module.exports = router; 

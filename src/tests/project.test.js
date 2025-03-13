@@ -39,48 +39,77 @@ let fileId;
 
 // Setup before tests
 beforeAll(async () => {
-    // Clear test data
-    await User.deleteMany({ email: { $in: [testStudent.email, testReviewer.email] } });
-    await Project.deleteMany({ title: testProject.title });
+    try {
+        // Clear test data
+        await User.deleteMany({ email: { $in: [testStudent.email, testReviewer.email] } });
+        await Project.deleteMany({ title: testProject.title });
 
-    // Register test users
-    await request(app)
-        .post('/api/auth/register')
-        .send(testStudent);
+        // Register test users
+        const studentResponse = await request(app)
+            .post('/api/auth/register')
+            .send(testStudent);
 
-    await request(app)
-        .post('/api/auth/register')
-        .send(testReviewer);
+        console.log('Student registration response:', studentResponse.status, studentResponse.body);
 
-    // Verify users for testing
-    const studentUser = await User.findOne({ email: testStudent.email });
-    await request(app)
-        .post('/api/auth/verify-test')
-        .send({ userId: studentUser._id.toString() });
+        const reviewerResponse = await request(app)
+            .post('/api/auth/register')
+            .send(testReviewer);
 
-    const reviewerUser = await User.findOne({ email: testReviewer.email });
-    await request(app)
-        .post('/api/auth/verify-test')
-        .send({ userId: reviewerUser._id.toString() });
+        console.log('Reviewer registration response:', reviewerResponse.status, reviewerResponse.body);
 
-    // Login to get cookies
-    const studentLogin = await request(app)
-        .post('/api/auth/login')
-        .send({
-            email: testStudent.email,
-            password: testStudent.password
-        });
+        // Wait for users to be created
+        const studentUser = await User.findOne({ email: testStudent.email });
+        if (!studentUser) {
+            console.error('Student user not found in database after registration');
+            throw new Error('Student user not created');
+        }
 
-    studentCookies = studentLogin.headers['set-cookie'];
+        const reviewerUser = await User.findOne({ email: testReviewer.email });
+        if (!reviewerUser) {
+            console.error('Reviewer user not found in database after registration');
+            throw new Error('Reviewer user not created');
+        }
 
-    const reviewerLogin = await request(app)
-        .post('/api/auth/login')
-        .send({
-            email: testReviewer.email,
-            password: testReviewer.password
-        });
+        console.log('Student user ID:', studentUser._id);
+        console.log('Reviewer user ID:', reviewerUser._id);
 
-    reviewerCookies = reviewerLogin.headers['set-cookie'];
+        // Verify users for testing
+        const studentVerifyResponse = await request(app)
+            .post('/api/auth/verify-test')
+            .send({ userId: studentUser._id.toString() });
+
+        console.log('Student verification response:', studentVerifyResponse.status, studentVerifyResponse.body);
+
+        const reviewerVerifyResponse = await request(app)
+            .post('/api/auth/verify-test')
+            .send({ userId: reviewerUser._id.toString() });
+
+        console.log('Reviewer verification response:', reviewerVerifyResponse.status, reviewerVerifyResponse.body);
+
+        // Login to get cookies
+        const studentLogin = await request(app)
+            .post('/api/auth/login')
+            .send({
+                email: testStudent.email,
+                password: testStudent.password
+            });
+
+        studentCookies = studentLogin.headers['set-cookie'];
+        console.log('Student login cookies:', studentCookies ? 'received' : 'not received');
+
+        const reviewerLogin = await request(app)
+            .post('/api/auth/login')
+            .send({
+                email: testReviewer.email,
+                password: testReviewer.password
+            });
+
+        reviewerCookies = reviewerLogin.headers['set-cookie'];
+        console.log('Reviewer login cookies:', reviewerCookies ? 'received' : 'not received');
+    } catch (error) {
+        console.error('Error in beforeAll:', error);
+        throw error;
+    }
 });
 
 // Cleanup after tests

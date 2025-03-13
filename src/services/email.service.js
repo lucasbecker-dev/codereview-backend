@@ -119,32 +119,24 @@ class EmailService {
 
     /**
      * Send a notification email
-     * @param {string} to - Recipient email
-     * @param {string} name - Recipient name
-     * @param {string} notificationType - Type of notification
-     * @param {Object} data - Notification data
+     * @param {Object} options - Email options
+     * @param {string} options.to - Recipient email
+     * @param {string} options.subject - Email subject
+     * @param {string} options.content - Notification content
+     * @param {string} options.type - Notification type
+     * @param {string} options.firstName - Recipient first name
      * @returns {Promise<Object>} - Nodemailer send result
      */
-    async sendNotificationEmail(to, name, notificationType, data) {
-        let subject = '';
-        let templateData = { name, ...data };
+    async sendNotificationEmail(options) {
+        const { to, subject, content, type, firstName } = options;
 
-        switch (notificationType) {
-            case 'projectStatus':
-                subject = `Project Status Update: ${data.projectTitle}`;
-                break;
-            case 'newComment':
-                subject = `New Comment on ${data.projectTitle}`;
-                break;
-            case 'newAssignment':
-                subject = 'New Review Assignment';
-                break;
-            case 'newSubmission':
-                subject = 'New Project Submission';
-                break;
-            default:
-                subject = 'Notification from CodeReview Platform';
-        }
+        const templateData = {
+            name: firstName,
+            content,
+            type,
+            platformUrl: process.env.FRONTEND_URL,
+            currentYear: new Date().getFullYear()
+        };
 
         const html = await this.loadTemplate('notification', templateData);
 

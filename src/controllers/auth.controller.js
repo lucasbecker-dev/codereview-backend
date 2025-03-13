@@ -143,8 +143,13 @@ const login = async (req, res) => {
  */
 const logout = async (req, res) => {
     try {
-        // Clear the auth cookie
-        res.clearCookie('auth_token');
+        // Clear the auth cookie with proper options to ensure it's invalidated
+        res.clearCookie('auth_token', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            path: '/'
+        });
         res.json({ message: 'Logged out successfully' });
     } catch (error) {
         console.error('Logout error:', error);

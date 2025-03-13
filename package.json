@@ -9,6 +9,7 @@
     "test": "jest --watchAll --verbose",
     "test:project": "jest src/tests/project.test.js --verbose",
     "test-project-api": "node src/scripts/testProjectAPI.js",
+    "test-comment-api": "node src/scripts/testCommentAPI.js",
     "test-project-endpoints": "node src/scripts/testProjectEndpoints.js",
     "verify-test-user": "node src/scripts/verifyTestUser.js",
     "lint": "eslint .",
@@ -35,6 +36,7 @@
   "homepage": "https://github.com/lucasbecker-dev/codereview-backend#readme",
   "dependencies": {
     "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

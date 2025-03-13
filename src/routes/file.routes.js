@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const fileController = require('../controllers/file.controller');
+const { getFileComments } = require('../controllers/comment.controller');
 const { protect } = require('../middleware/auth');
 
 // Protect all routes
@@ -12,5 +13,9 @@ router.route('/:id')
 
 router.route('/:id/raw')
     .get(fileController.getRawFileContent);
+
+// File comments routes
+router.route('/:fileId/comments')
+    .get(getFileComments);
 
 module.exports = router; 
