@@ -15,6 +15,7 @@
     "test:email": "jest src/tests/email.service.test.js --verbose",
     "test:cohort": "jest src/tests/cohort.test.js --verbose",
     "test:assignment": "jest src/tests/assignment.test.js --verbose",
+    "test:file": "jest src/tests/file.test.js --verbose",
     "lint": "eslint .",
     "drop-db": "node src/scripts/dropDatabase.js",
     "fresh": "node src/scripts/freshStart.js",
@@ -36,6 +37,7 @@
   "homepage": "https://github.com/lucasbecker-dev/codereview-backend#readme",
   "dependencies": {
     "bcrypt": "^5.1.1",
+    "codereview-backend": "file:",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
