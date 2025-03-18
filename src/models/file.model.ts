@@ -1,6 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-// File document interface
 export interface IFile extends Document {
     project: mongoose.Types.ObjectId;
     filename: string;
@@ -9,49 +8,113 @@ export interface IFile extends Document {
     fileType: string;
     createdAt: Date;
     s3Key: string;
+    s3Url: string;
     language: string;
+    size: number;
+    mimeType: string;
+    uploadedBy: mongoose.Types.ObjectId;
 }
 
-// File schema
-const fileSchema = new Schema<IFile>(
+const FileSchema: Schema = new Schema(
     {
         project: {
             type: Schema.Types.ObjectId,
             ref: 'Project',
-            required: true
+            required: true,
         },
         filename: {
             type: String,
             required: true,
-            trim: true
         },
         path: {
             type: String,
-            required: true
+            required: true,
         },
         content: {
             type: String,
-            required: true
+            default: '',
         },
         fileType: {
             type: String,
-            required: true
+            required: true,
         },
         s3Key: {
             type: String,
-            required: true
+            required: true,
+            unique: true,
+        },
+        s3Url: {
+            type: String,
         },
         language: {
             type: String,
+            default: 'plaintext',
+        },
+        size: {
+            type: Number,
             required: true,
-            default: 'plaintext'
-        }
+        },
+        mimeType: {
+            type: String,
+            required: true,
+        },
+        uploadedBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            required: true,
+        },
     },
     {
-        timestamps: true
+        timestamps: true,
     }
 );
 
-const File = mongoose.model<IFile>('File', fileSchema);
+// Pre-save hook to generate language from fileType
+FileSchema.pre<IFile>('save', function (next) {
+    // Map file extensions to programming languages for syntax highlighting
+    const extensionToLanguage: Record<string, string> = {
+        '.js': 'javascript',
+        '.jsx': 'jsx',
+        '.ts': 'typescript',
+        '.tsx': 'tsx',
+        '.py': 'python',
+        '.rb': 'ruby',
+        '.java': 'java',
+        '.c': 'c',
+        '.cpp': 'cpp',
+        '.cs': 'csharp',
+        '.php': 'php',
+        '.html': 'html',
+        '.css': 'css',
+        '.scss': 'scss',
+        '.json': 'json',
+        '.md': 'markdown',
+        '.xml': 'xml',
+        '.sql': 'sql',
+        '.go': 'go',
+        '.rs': 'rust',
+        '.sh': 'bash',
+        '.yaml': 'yaml',
+        '.yml': 'yaml',
+    };
 
-export default File; 
+    // Extract extension from filename
+    const fileExt = this.filename.substring(this.filename.lastIndexOf('.')).toLowerCase();
+
+    // Set language based on extension, or default to plaintext
+    this.language = extensionToLanguage[fileExt] || 'plaintext';
+
+    next();
+});
+
+// Virtual for direct download URL (not stored in DB)
+FileSchema.virtual('downloadUrl').get(function (this: IFile) {
+    return `/api/files/download/${this.s3Key}`;
+});
+
+// Virtual for view URL (not stored in DB)
+FileSchema.virtual('viewUrl').get(function (this: IFile) {
+    return `/api/files/${this.s3Key}`;
+});
+
+export default mongoose.model<IFile>('File', FileSchema); 

@@ -6,6 +6,13 @@ import connectDB from './config/database';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
+import userRoutes from './routes/user.routes';
+import projectRoutes from './routes/project.routes';
+import fileRoutes from './routes/file.routes';
+import commentRoutes from './routes/comment.routes';
+import cohortRoutes from './routes/cohort.routes';
+import assignmentRoutes from './routes/assignment.routes';
+import notificationRoutes from './routes/notification.routes';
 
 // Load environment variables
 dotenv.config();
@@ -23,6 +30,13 @@ app.use(express.urlencoded({ extended: true }));
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api', fileRoutes); // File routes include both /api/files and /api/projects/:projectId/files
+app.use('/api', commentRoutes); // Comment routes include multiple paths
+app.use('/api/cohorts', cohortRoutes);
+app.use('/api/assignments', assignmentRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Base route
 app.get('/', (req: Request, res: Response) => {
