@@ -64,7 +64,71 @@ A robust API backend for the CodeReview platform, enabling bootcamp students to 
 
 ## Deployment
 
-This project is configured for deployment on Railway. When you push changes to the main branch, Railway will automatically build and deploy the application.
+### AWS Elastic Beanstalk Deployment
+
+This project is configured for deployment on AWS Elastic Beanstalk using GitHub Actions. When you push changes to the main branch, GitHub Actions will automatically build and deploy the application.
+
+#### Prerequisites
+
+1. AWS Account with Elastic Beanstalk access
+2. Elastic Beanstalk application and environment created (codereview-backend and codereview-backend-env)
+3. AWS IAM user with deployment permissions
+4. GitHub repository secrets configured
+
+#### GitHub Secrets Setup
+
+Add the following secrets to your GitHub repository:
+
+- `AWS_ACCESS_KEY_ID`: Your AWS IAM user access key
+- `AWS_SECRET_ACCESS_KEY`: Your AWS IAM user secret key
+
+#### Manual Deployment
+
+If you need to deploy manually:
+
+1. Build the application:
+
+   ```bash
+   npm run build
+   ```
+
+2. Package the application:
+
+   ```bash
+   npm run package
+   ```
+
+3. Deploy to Elastic Beanstalk using the AWS CLI:
+
+   ```bash
+   aws elasticbeanstalk create-application-version --application-name codereview-backend --version-label manual-deploy-$(date +%Y%m%d%H%M%S) --source-bundle S3Bucket=your-deployment-bucket,S3Key=dist.zip
+   aws elasticbeanstalk update-environment --application-name codereview-backend --environment-name codereview-backend-env --version-label manual-deploy-$(date +%Y%m%d%H%M%S)
+   ```
+
+#### Environment Variables
+
+Configure the following environment variables in Elastic Beanstalk:
+
+- `PORT`: 8080 (default for Elastic Beanstalk)
+- `MONGODB_URI`: MongoDB Atlas connection string
+- `JWT_SECRET`: Secure JWT signing key
+- `JWT_EXPIRATION`: Token expiration period
+- `S3_ACCESS_KEY`: AWS S3 access key
+- `S3_SECRET_KEY`: AWS S3 secret key
+- `S3_BUCKET_NAME`: AWS S3 bucket name
+- `S3_REGION`: AWS S3 region
+- `FRONTEND_URL`: URL of the frontend service on CloudFront
+- `EMAIL_SERVICE`: Email service provider
+- `EMAIL_HOST`: SMTP host
+- `EMAIL_PORT`: SMTP port
+- `EMAIL_USER`: SMTP username
+- `EMAIL_PASS`: SMTP password
+- `EMAIL_FROM`: From email address
+- `NODE_ENV`: Set to `production` for deployment
+
+### Railway Deployment
+
+This project is also configured for deployment on Railway. When you push changes to the main branch, Railway will automatically build and deploy the application.
 
 ### Railway Configuration
 
