@@ -4,6 +4,9 @@ import dotenv from 'dotenv';
 import path from 'path';
 import connectDB from './config/database';
 
+// Import routes
+import authRoutes from './routes/auth.routes';
+
 // Load environment variables
 dotenv.config();
 
@@ -18,7 +21,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes (to be added later)
+// API Routes
+app.use('/api/auth', authRoutes);
+
+// Base route
 app.get('/', (req: Request, res: Response) => {
     res.json({ message: 'Welcome to the CodeReview API' });
 });
